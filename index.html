@@ -198,38 +198,59 @@
   classDef goalNode fill:#2E7D46,stroke:#123d22,stroke-width:3px,color:#ffffff,font-weight:bold,font-size:18px;
   classDef dec fill:#F2F4F7,stroke:#9AA5B1,color:#333;</pre></div></div>
   <div class="panel" data-k="tobe"><div class="scale"><pre class="mermaid" data-graph="tobe">flowchart TB
-  ST(["🚩 スタート：案件登録"]):::startNode --&gt; P1["目的・基準日・対象範囲の承認"]:::human
-  P1 --&gt; P2["案件マスタを承認&lt;br/&gt;単体/グループ・取得者別・TKC要否"]:::human
-  P2 --&gt; R0
+  ST(["🚩 スタート：案件登録"]):::startNode --&gt; REG1
 
-  subgraph G_REC["資料受領・自動分類"]
+  subgraph G_REG["案件登録・初期承認"]
     direction TB
-    R0["資料到着をシステムが検知&lt;br/&gt;Dropbox連携"]:::system --&gt; R1["会社/種別/期/版を自動抽出"]:::system
-    R1 --&gt; R2["受領済/未受領一覧・必須/補足を自動照合"]:::system
-    R2 --&gt; R2b["不鮮明/古い版/基準日違い候補を検知"]:::ai
-    R2b --&gt; R3{"必須資料が揃うか"}:::dec
-    R2c["高信頼は自動反映/低信頼のみ人が修正"]:::human
-    R2 --&gt; R2c
+    REG1["案件登録：識別子採番・主目的・基準日・対象会社・親子孫関係・株主/取得者・成果物・TKC要否"]:::system --&gt; REG2["依頼分類ロジック判定&lt;br/&gt;新規/既存顧客・カマチ作成/他所作成決算書 → 依頼パターン・方式候補を初期化"]:::system
+    REG2 --&gt; REG3["ロール・権限設定／状態=案件受付済"]:::system
+    REG3 --&gt; REG4["カマチが案件マスタを承認（案件定義済）"]:::human
   end
-  R3 --&gt;|"不足/不鮮明/版違い/基準日違い"| RW1["再依頼文案を自動生成→顧客へ再依頼"]:::rework
-  RW1 -.-&gt; R0
-  R3 --&gt;|"揃った会社から"| W0
 
-  subgraph G_QUEUE["着手判断（依存順で管理）"]
+  subgraph G_DL["資料依頼リスト生成"]
     direction TB
-    W0["着手可能な会社・資産・方式候補を表示"]:::system --&gt; W1["依存関係順で評価キューを管理"]:::system
-    W1 --&gt; W2["カマチが表示キューから優先順位を決定"]:::human
+    DL1["必要資料候補を生成&lt;br/&gt;会社別・必須/補足・外部参照/顧客徴求（依頼資料要件識別子を採番）"]:::system --&gt; DL2["顧客向け依頼文案を生成"]:::ai
+    DL2 --&gt; DL3["カマチが依頼リスト・文案を確認"]:::human
+    DL3 --&gt; DL4["顧客へ依頼（依頼済・未到着）"]:::system
+  end
+  REG4 --&gt; DL1
+
+  subgraph G_REC["資料受領・自動分類・品質チェック"]
+    direction TB
+    R0["到着検知・一時受領レコード（到着済・未分類）"]:::system --&gt; R1["会社/種別/期/版を自動抽出・同名/版違い/基準日整合の候補"]:::system
+    R1 --&gt; R2["一次分類（高/中/低信頼）高信頼は自動反映（分類確定済）"]:::ai
+    R2 --&gt; R2h["中・低信頼/競合のみカマチ修正（要分類確認/要版確認/要基準日確認）"]:::human
+    R1 --&gt; RQ["受領品質チェック&lt;br/&gt;破損/不鮮明/ページ欠落/回転/重複/古版/基準日違い/会社違い"]:::ai
+    R2 --&gt; R3["棚卸：受領率(案件/会社/種別)・不足資料一覧・着手可能な評価単位"]:::system
+    RQ --&gt; R3
+    R3 --&gt; R4["利用可能化：資料識別子を付与・依頼要件と対応確定（利用可能）"]:::system
+  end
+  DL4 --&gt; R0
+  RQ --&gt;|"必須不足/不鮮明/版違い/基準日違い"| RW1["再依頼文案を自動生成→顧客再依頼（再依頼中）&lt;br/&gt;外部参照で代替可なら顧客再依頼不要"]:::rework
+  RW1 -.-&gt; R0
+  R4 --&gt; W0
+
+  subgraph G_QUEUE["着手判断（依存順・状態管理）"]
+    direction TB
+    W0["着手可能な会社・資産区分・方式候補を表示"]:::system --&gt; W1["依存関係順で評価キューを管理&lt;br/&gt;依頼済・未到着/到着済・未分類/分類確定済/利用可能/再依頼中/依存ブロック中/判定保留"]:::system
+    W1 --&gt; W2["カマチがキューから優先順位を決定"]:::human
   end
   W2 --&gt; M0
 
   subgraph G_METHOD["方式判定（候補生成→承認）"]
     direction TB
-    M0["規模・株主区分・特定会社の前提を自動確認"]:::system --&gt; M0b{"前提が揃うか"}:::dec
-    M0b --&gt;|"不足"| MHOLD["判定保留/仮方式で仮計算"]:::rework
-    M0b --&gt;|"充足"| M1["方式判定候補を生成&lt;br/&gt;大=類似/中=併用/小=純資産/少数=配当還元"]:::ai
-    M1 --&gt; MOK["カマチが判定を確認し承認"]:::human
-    MOK --&gt; MJ["判定理由をrule_idとともに保存"]:::system
+    M0["前提を自動確認（規模/株主区分/特定会社）前提不足は判定保留"]:::system --&gt; M1["方式判定候補を生成&lt;br/&gt;少数株主=配当還元/大=類似/中=併用/小=純資産（特定会社は純資産寄せ）"]:::ai
+    M1 --&gt; MOK["カマチが確認・承認（方式判定承認済）／前提不足は仮方式"]:::human
+    MOK --&gt; MJ["判定理由を判定ルール識別子とともに保存"]:::system
   end
+
+  subgraph G_COND["計算条件設定（係数・条件）"]
+    direction TB
+    C1["適用中の係数・条件を読込（37%等）案件類型・基準日で初期化"]:::system --&gt; C2["カマチが必要項目だけ変更（変更理由/者/日時を記録）"]:::human
+    C2 --&gt; C3["影響する会社・シート・出力を特定（再計算待ち）"]:::system
+    C3 --&gt; C4["レビュー者/税理士が条件変更を承認（否認→直前承認済へ戻す）"]:::human
+  end
+  MJ --&gt; C1
 
   subgraph G_JUN["純資産価額方式"]
     direction TB
@@ -241,7 +262,7 @@
     J6 --&gt; J7["海外関係会社評価候補"]:::system
     J7 --&gt; J8["法人税等相当額控除(37%等)"]:::system
     J8 --&gt; J9["1株純資産価額を算定"]:::goal
-    JAI["不足/競合/外部不一致を検知→保留"]:::ai
+    JAI["不足/競合/外部不一致を検知→土地評価保留"]:::ai
     J3 --&gt; JAI
     JCHK["カマチは要確認項目のみ補正"]:::human
     J9 --&gt; JCHK
@@ -250,7 +271,7 @@
 
   subgraph G_RUIJI["類似業種比準方式"]
     direction TB
-    K1["対象会社・比準要素を自動抽出"]:::system --&gt; K2["業種目候補を生成"]:::ai
+    K1["対象会社・比準要素を自動抽出"]:::system --&gt; K2["業種目候補を生成（未確定は類似業種仮計算）"]:::ai
     K2 --&gt; K2H["カマチが業種目を最終確定"]:::human
     K2H --&gt; K3["類似業種株価を候補取得"]:::system
     K3 --&gt; K4["比準要素を候補抽出(配当/利益/純資産)"]:::system
@@ -274,7 +295,7 @@
     HD2 --&gt; HD3["詳細仕様未定→要人手対応を明示"]:::rework
   end
 
-  MOK --&gt; J1
+  C4 --&gt; J1
   MOK --&gt; K1
   MOK --&gt; H1
   MOK --&gt; HD1
@@ -284,43 +305,53 @@
   subgraph G_DEP["会社依存（状態管理）"]
     direction TB
     D1["孫会社キューを自動生成"]:::system --&gt; D2{"孫確定?"}:::dec
-    D2 --&gt;|"未確定"| DBLK["上位を『仮/ブロック中』と表示"]:::rework
+    D2 --&gt;|"未確定"| DBLK["上位を依存ブロック中で表示"]:::rework
     D2 --&gt;|"確定"| D3["子会社へ自動反映"]:::system
     D3 --&gt; D4{"子確定?"}:::dec
     D4 --&gt;|"未確定"| DBLK
     D4 --&gt;|"確定"| D5["親会社へ自動反映"]:::system
   end
   D5 -.-&gt; J6
-  DBLK -.-&gt; W2
+  DBLK -.-&gt; W1
 
   J9 --&gt; SUM0
   K5 --&gt; SUM0
-  H4 --&gt; SUM0
+  H5 --&gt; SUM0
   HD2 --&gt; SUM0
 
   subgraph G_SUM["株価サマリー集約"]
     direction TB
-    SUM0["各社単価・採用単価候補を集約"]:::system --&gt; SUM1["#REF!/未反映/単位不一致を自動検知"]:::ai
+    SUM0["各社単価・採用単価候補を集約"]:::system --&gt; SUM1["参照切れ/未反映/単位不一致を自動検知"]:::ai
     SUM1 --&gt; SUM2{"異常があるか"}:::dec
     SUM2 --&gt; SUMH["カマチが採用単価と総額を確認"]:::human
   end
-  SUM2 --&gt;|"異常あり"| RW3["計算差し戻し&lt;br/&gt;参照元/セル/式/手入力を表示"]:::rework
+  SUM2 --&gt;|"異常あり"| RW3["計算差し戻し：参照元/セル/式/手入力を表示"]:::rework
   RW3 -.-&gt; J1
   RW3 -.-&gt; SUM0
-  SUMH --&gt; OUT0
+
+  subgraph G_REEVAL["評価結果起点の追加資料依頼・再評価"]
+    direction TB
+    RE1["カマチが評価結果の不自然さを検知&lt;br/&gt;単価/評価差額/比準要素/土地/関係会社株式"]:::human --&gt; RE2["不足観点と確認候補資料を提示&lt;br/&gt;追加資料 or 既存再読解を判定"]:::ai
+    RE2 --&gt; RE3["追加資料要件を追加 or 既存要件を再依頼中へ戻す→顧客へ追加依頼"]:::rework
+    RE3 --&gt; RE4["関連識別子(抽出/計算/出力)を再オープン→再抽出→再計算→再整合→復帰"]:::system
+  end
+  SUMH --&gt;|"不自然あり"| RE1
+  RE4 -.-&gt; R0
+  RE4 -.-&gt; J1
+  SUMH --&gt;|"問題なし"| OUT0
 
   subgraph G_OUT["整理表・TKC・追加計算"]
     direction TB
-    OUT0["TKC入力前整理表を自動生成"]:::system --&gt; AIC1["AIチェック1: 整理表↔計算値の差分"]:::ai
-    AIC1 --&gt; OUTA["カマチが整理表を承認"]:::human
+    OUT0["TKC入力前整理表を自動生成"]:::system --&gt; AIC1["一次自動整合確認：整理表↔計算値の差分"]:::ai
+    AIC1 --&gt; OUTA["カマチが整理表を承認（整理表確認待ち→整理表承認済）"]:::human
     OUTA --&gt; OUT1{"TKC対象か"}:::dec
-    OUT1 --&gt;|"対象外/整理表FIX"| OUT4["差分自動照合へ"]:::system
-    OUT1 --&gt;|"対象"| OUT2["入力候補生成→人がTKC入力→出力取得"]:::human
+    OUT1 --&gt;|"対象外/整理表FIX"| OUT4["差分を自動照合"]:::system
+    OUT1 --&gt;|"対象"| OUT2["入力候補生成→人がTKC入力→出力取得（TKC結果確認待ち）"]:::human
     OUT2 --&gt; OUT3{"追加計算が必要か"}:::dec
     OUT3 --&gt;|"必要"| OUT3a["追加計算→カマチ確認"]:::human
     OUT3 --&gt;|"不要"| OUT4
     OUT3a --&gt; OUT4
-    OUT4 --&gt; AIC2["AIチェック2: TKC前後の整合性"]:::ai
+    OUT4 --&gt; AIC2["二次自動整合確認：TKC前後の整合性"]:::ai
     AIC2 --&gt; OUT5{"差分があるか"}:::dec
   end
   OUT5 --&gt;|"あり"| RW3
@@ -328,12 +359,12 @@
 
   subgraph G_REP["報告書・PDF・提出"]
     direction TB
-    REP0["報告書ドラフトを自動生成(根拠ID紐付)"]:::system --&gt; REP1["数値↔説明を自動照合"]:::ai
-    REP1 --&gt; REP1H["カマチが文章と根拠を確認"]:::human
+    REP0["報告書ドラフトを自動生成（各段落に根拠識別子を紐付）"]:::system --&gt; REP1["数値↔説明を自動照合"]:::ai
+    REP1 --&gt; REP1H["カマチが文章と根拠を確認（報告書確認待ち）"]:::human
     REP1H --&gt; REP2["承認済データからPDFを自動作成"]:::system
     REP2 --&gt; REP3{"表示崩れ/差替漏れがないか"}:::dec
     REP3 --&gt;|"異常"| RWR["修正"]:::rework
-    REP3 --&gt;|"正常"| REP4["カマチが提出版を最終承認"]:::human
+    REP3 --&gt;|"正常"| REP4["カマチが提出版を最終承認（提出承認済）"]:::human
   end
   RWR -.-&gt; REP0
   REP4 --&gt; FIN(["🏁 ゴール：顧客へ提出"]):::goalNode
