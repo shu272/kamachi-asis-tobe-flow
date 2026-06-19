@@ -44,6 +44,8 @@
     <span><i class="sw" style="background:#ECE3F6;border-color:#9B7FC2"></i>外部参照</span>
     <span><i class="sw" style="background:#F7D9C8;border-color:#C98A5A"></i>差し戻し・ブロック</span>
     <span><i class="sw" style="background:#fff;border-color:#2E7D46"></i>成果物・提出</span>
+    <span><i class="sw" style="background:#1E2761;border-color:#11183f"></i><b>スタート</b></span>
+    <span><i class="sw" style="background:#2E7D46;border-color:#123d22"></i><b>ゴール</b></span>
     <span><i class="sw" style="background:#F2F4F7;border-color:#9AA5B1;transform:rotate(45deg)"></i>判断・分岐</span>
   </div>
   <div class="toolbar">
@@ -56,7 +58,7 @@
 </header>
 <div class="stage">
   <div class="panel active" data-k="asis"><div class="scale"><pre class="mermaid" data-graph="asis">flowchart TB
-  ST["案件発生"]:::goal --&gt; P1["目的・基準日・対象範囲の確認"]:::manual
+  ST(["🚩 スタート：案件発生"]):::startNode --&gt; P1["目的・基準日・対象範囲の確認"]:::manual
   P1 --&gt; P2["初期判断&lt;br/&gt;単体/グループ・取得者別・TKC要否"]:::manual
   P2 --&gt; R0
 
@@ -183,7 +185,7 @@
     REP3 --&gt;|"正常"| REP4["提出版確定"]:::human
   end
   RWR -.-&gt; REP0
-  REP4 --&gt; FIN["顧客へ提出"]:::goal
+  REP4 --&gt; FIN(["🏁 ゴール：顧客へ提出"]):::goalNode
 
   classDef manual fill:#FFE0E0,stroke:#D97A7A,color:#333;
   classDef system fill:#E6F0FB,stroke:#5B92D1,color:#333;
@@ -192,9 +194,11 @@
   classDef ext fill:#ECE3F6,stroke:#9B7FC2,color:#333;
   classDef rework fill:#F7D9C8,stroke:#C98A5A,color:#333;
   classDef goal fill:#FFFFFF,stroke:#2E7D46,color:#1B5E20;
+  classDef startNode fill:#1E2761,stroke:#11183f,stroke-width:3px,color:#ffffff,font-weight:bold,font-size:18px;
+  classDef goalNode fill:#2E7D46,stroke:#123d22,stroke-width:3px,color:#ffffff,font-weight:bold,font-size:18px;
   classDef dec fill:#F2F4F7,stroke:#9AA5B1,color:#333;</pre></div></div>
   <div class="panel" data-k="tobe"><div class="scale"><pre class="mermaid" data-graph="tobe">flowchart TB
-  ST["案件登録"]:::system --&gt; P1["目的・基準日・対象範囲の承認"]:::human
+  ST(["🚩 スタート：案件登録"]):::startNode --&gt; P1["目的・基準日・対象範囲の承認"]:::human
   P1 --&gt; P2["案件マスタを承認&lt;br/&gt;単体/グループ・取得者別・TKC要否"]:::human
   P2 --&gt; R0
 
@@ -332,7 +336,7 @@
     REP3 --&gt;|"正常"| REP4["カマチが提出版を最終承認"]:::human
   end
   RWR -.-&gt; REP0
-  REP4 --&gt; FIN["顧客へ提出"]:::goal
+  REP4 --&gt; FIN(["🏁 ゴール：顧客へ提出"]):::goalNode
 
   classDef manual fill:#FFE0E0,stroke:#D97A7A,color:#333;
   classDef system fill:#E6F0FB,stroke:#5B92D1,color:#333;
@@ -341,6 +345,8 @@
   classDef ext fill:#ECE3F6,stroke:#9B7FC2,color:#333;
   classDef rework fill:#F7D9C8,stroke:#C98A5A,color:#333;
   classDef goal fill:#FFFFFF,stroke:#2E7D46,color:#1B5E20;
+  classDef startNode fill:#1E2761,stroke:#11183f,stroke-width:3px,color:#ffffff,font-weight:bold,font-size:18px;
+  classDef goalNode fill:#2E7D46,stroke:#123d22,stroke-width:3px,color:#ffffff,font-weight:bold,font-size:18px;
   classDef dec fill:#F2F4F7,stroke:#9AA5B1,color:#333;</pre></div></div>
 </div>
 <script>
