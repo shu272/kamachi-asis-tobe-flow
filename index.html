@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>カマチ As-Is / To-Be 単一統合フロー</title>
+<style>
+  :root{ --ink:#23303a; --muted:#6b7682; --line:#e2e7ec; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:"Noto Sans CJK JP","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; color:var(--ink); background:#fff; }
+  header{ padding:14px 18px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; z-index:5; }
+  h1{ font-size:18px; margin:0 0 8px; color:#1E2761; }
+  .tabs{ display:flex; gap:8px; margin-bottom:8px; }
+  .tab{ font-size:14px; font-weight:700; padding:7px 16px; border:1px solid var(--line); border-radius:8px 8px 0 0; background:#f7f9fb; color:var(--muted); cursor:pointer; }
+  .tab.active[data-k=asis]{ background:#FBE9E9; color:#B5524F; border-color:#E7C9C9; }
+  .tab.active[data-k=tobe]{ background:#E6F1FB; color:#2F5E8C; border-color:#C9DCEF; }
+  .legend{ display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:var(--muted); align-items:center; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .sw{ width:14px; height:12px; border-radius:3px; border:1px solid #999; display:inline-block; }
+  .toolbar{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin-top:8px; }
+  .toolbar input[type=range]{ width:240px; }
+  .toolbar button{ font-size:12px; padding:3px 8px; border:1px solid var(--line); background:#f7f9fb; border-radius:6px; cursor:pointer; }
+  .stage{ height:calc(100vh - 150px); overflow:auto; padding:16px; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .scale{ transform-origin:top left; }
+  .mermaid svg{ max-width:none !important; height:auto; }
+  .mermaid{ min-height:20px; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>税理士法人カマチ 開発Ph2 ｜ As-Is / To-Be 単一統合フロー</h1>
+  <div class="tabs">
+    <button class="tab active" data-k="asis">As-Is（現状）</button>
+    <button class="tab" data-k="tobe">To-Be（提案後）</button>
+  </div>
+  <div class="legend">
+    <span><i class="sw" style="background:#FFE0E0;border-color:#D97A7A"></i>手作業・人依存</span>
+    <span><i class="sw" style="background:#E6F0FB;border-color:#5B92D1"></i>システム自動</span>
+    <span><i class="sw" style="background:#DDF1E2;border-color:#54A06A"></i>AI候補・検知・チェック</span>
+    <span><i class="sw" style="background:#FFF1C9;border-color:#C8A94A"></i>人の確認・承認</span>
+    <span><i class="sw" style="background:#ECE3F6;border-color:#9B7FC2"></i>外部参照</span>
+    <span><i class="sw" style="background:#F7D9C8;border-color:#C98A5A"></i>差し戻し・ブロック</span>
+    <span><i class="sw" style="background:#fff;border-color:#2E7D46"></i>成果物・提出</span>
+    <span><i class="sw" style="background:#F2F4F7;border-color:#9AA5B1;transform:rotate(45deg)"></i>判断・分岐</span>
+  </div>
+  <div class="toolbar">
+    <span>ズーム</span>
+    <input id="zoom" type="range" min="0.4" max="2.2" step="0.1" value="1.0"/>
+    <span id="zval">100%</span>
+    <button id="fit">幅に合わせる</button>
+    <button id="reset">等倍</button>
+  </div>
+</header>
+<div class="stage">
+  <div class="panel active" data-k="asis"><div class="scale"><pre class="mermaid" data-graph="asis">flowchart TB
+  ST["案件発生"]:::goal --&gt; P1["目的・基準日・対象範囲の確認"]:::manual
+  P1 --&gt; P2["初期判断&lt;br/&gt;単体/グループ・取得者別・TKC要否"]:::manual
+  P2 --&gt; R0
+
+  subgraph G_REC["資料受領・棚卸"]
+    direction TB
+    R0["資料依頼・順次到着・Dropbox格納"] --&gt; R1["名称/会社/種別/期/版を目視確認"]:::manual
+    R1 --&gt; R2["受領済/未受領を一覧化・必須/補足判断"]:::manual
+    R2 --&gt; R3{"必須資料が揃うか"}:::dec
+  end
+  R3 --&gt;|"不足/不鮮明/版違い/基準日違い"| RW1["顧客へ再依頼"]:::rework
+  RW1 -.-&gt; R0
+  R3 --&gt;|"揃った会社から"| W0
+
+  subgraph G_QUEUE["着手判断（全資料待ちをしない）"]
+    direction TB
+    W0["読める会社・資産区分から着手"]:::manual --&gt; W1["下位会社先着なら下位から入力"]:::manual
+    W1 --&gt; W2["読める会社/不足/依存ブロック/候補方式を人が把握"]:::rework
+  end
+  W2 --&gt; M0
+
+  subgraph G_METHOD["方式判定"]
+    direction TB
+    M0["規模・株主区分・特定会社の前提整理"]:::manual --&gt; M1{"同族株主等か少数株主か"}:::dec
+    M1 --&gt;|"少数株主"| M_HAITO["配当還元 候補"]:::manual
+    M1 --&gt;|"同族株主等"| M2{"会社規模 大/中/小"}:::dec
+    M2 --&gt;|"大"| M_RUIJI["類似業種比準 主候補"]:::manual
+    M2 --&gt;|"中"| M_HEIYO["併用 主候補"]:::manual
+    M2 --&gt;|"小"| M_JUN["純資産価額 主候補"]:::manual
+    M2 --&gt; M3{"特定会社該当か"}:::dec
+    M3 --&gt;|"該当"| M_JUN
+    MJ["判定理由は構造化されず人が遡って説明"]:::rework
+    M3 --&gt; MJ
+  end
+
+  subgraph G_JUN["純資産価額方式"]
+    direction TB
+    J1["帳簿価額入力(資産/負債)"]:::manual --&gt; J2["税務調整(別表四/五)"]:::manual
+    J2 --&gt; J3["土地評価(路線価/倍率)"]:::manual
+    J3 --&gt; J4["建物評価"]:::manual
+    J4 --&gt; J5["保険評価"]:::manual
+    J5 --&gt; J6["有価証券評価"]:::manual
+    J6 --&gt; J7["海外関係会社評価"]:::manual
+    J7 --&gt; J8["法人税等相当額控除(37%等)"]:::manual
+    J8 --&gt; J9["1株純資産価額算定"]:::goal
+  end
+  J3X["外部: 路線価図/倍率表"]:::ext -.-&gt; J3
+
+  subgraph G_RUIJI["類似業種比準方式"]
+    direction TB
+    K1["対象会社・比準要素の特定"]:::manual --&gt; K2["業種目確定(手作業)"]:::manual
+    K2 --&gt; K3["類似業種株価取得(手入力)"]:::manual
+    K3 --&gt; K4["比準要素取得(配当/利益/純資産)"]:::manual
+    K4 --&gt; K5["類似業種比準価額計算"]:::goal
+  end
+  K2X["外部公表PDF(業種目/株価)"]:::ext -.-&gt; K2
+
+  subgraph G_HEIYO["併用方式"]
+    direction TB
+    H1["純資産結果と類似結果を両取り"]:::manual --&gt; H2{"両方確定か"}:::dec
+    H2 --&gt;|"未確定"| H3["採用単価を保留"]:::rework
+    H2 --&gt;|"確定"| H4["混合割合で採用単価を計算"]:::goal
+  end
+
+  subgraph G_HAITO["配当還元方式（取得者別）"]
+    direction TB
+    HD1["株主名簿・取得者区分を確認"]:::manual --&gt; HD2["配当資料・数値入力"]:::manual
+    HD2 --&gt; HD3["配当還元計算→取得者別評価"]:::goal
+  end
+
+  M_JUN --&gt; J1
+  M_RUIJI --&gt; K1
+  M_HEIYO --&gt; H1
+  M_HAITO --&gt; HD1
+  J9 --&gt; H1
+  K5 --&gt; H1
+
+  subgraph G_DEP["会社依存（下位→上位）"]
+    direction TB
+    D1["孫会社評価"]:::manual --&gt; D2{"孫確定?"}:::dec
+    D2 --&gt;|"未確定"| DBLK["上位の関係会社株式評価が停止"]:::rework
+    D2 --&gt;|"確定"| D3["子会社へ反映"]:::manual
+    D3 --&gt; D4{"子確定?"}:::dec
+    D4 --&gt;|"未確定"| DBLK
+    D4 --&gt;|"確定"| D5["親会社へ反映"]:::manual
+  end
+  D5 -.-&gt; J6
+  DBLK -.-&gt; W2
+
+  J9 --&gt; SUM0
+  K5 --&gt; SUM0
+  H4 --&gt; SUM0
+  HD3 --&gt; SUM0
+
+  subgraph G_SUM["株価サマリー集約"]
+    direction TB
+    SUM0["各社単価・採用単価を集約"]:::manual --&gt; SUM1{"#REF!/単位不一致がないか"}:::dec
+  end
+  SUM1 --&gt;|"異常あり"| RW3["計算差し戻し&lt;br/&gt;参照元/セル/式/手入力を再確認"]:::rework
+  RW3 -.-&gt; J1
+  RW3 -.-&gt; SUM0
+  SUM1 --&gt;|"正常"| OUT0
+
+  subgraph G_OUT["整理表・TKC・追加計算"]
+    direction TB
+    OUT0["TKC入力前整理表を作成"]:::manual --&gt; OUT1{"TKC対象か"}:::dec
+    OUT1 --&gt;|"対象"| OUT2["TKCへ手入力→出力確認"]:::manual
+    OUT1 --&gt;|"対象外"| OUT4["差分確認へ"]:::manual
+    OUT2 --&gt; OUT3{"追加計算が必要か"}:::dec
+    OUT3 --&gt;|"必要"| OUT3a["TKC結果をExcelへ戻し追加計算→カマチ確認"]:::human
+    OUT3 --&gt;|"不要"| OUT4
+    OUT3a --&gt; OUT4
+    OUT4 --&gt; OUT5{"差分があるか"}:::dec
+  end
+  OUT5 --&gt;|"あり"| RW3
+  OUT5 --&gt;|"なし"| REP0
+
+  subgraph G_REP["報告書・PDF・提出"]
+    direction TB
+    REP0["報告書作成(章立て/前提/最終単価/使用資料)"]:::manual --&gt; REP1{"数値と説明が一致か"}:::dec
+    REP1 --&gt;|"不一致"| RWR["再確認・修正"]:::rework
+    REP1 --&gt;|"一致"| REP2["PDF化"]:::manual
+    REP2 --&gt; REP3{"表示崩れ/差替漏れがないか"}:::dec
+    REP3 --&gt;|"異常"| RWR
+    REP3 --&gt;|"正常"| REP4["提出版確定"]:::human
+  end
+  RWR -.-&gt; REP0
+  REP4 --&gt; FIN["顧客へ提出"]:::goal
+
+  classDef manual fill:#FFE0E0,stroke:#D97A7A,color:#333;
+  classDef system fill:#E6F0FB,stroke:#5B92D1,color:#333;
+  classDef ai fill:#DDF1E2,stroke:#54A06A,color:#333;
+  classDef human fill:#FFF1C9,stroke:#C8A94A,color:#333;
+  classDef ext fill:#ECE3F6,stroke:#9B7FC2,color:#333;
+  classDef rework fill:#F7D9C8,stroke:#C98A5A,color:#333;
+  classDef goal fill:#FFFFFF,stroke:#2E7D46,color:#1B5E20;
+  classDef dec fill:#F2F4F7,stroke:#9AA5B1,color:#333;</pre></div></div>
+  <div class="panel" data-k="tobe"><div class="scale"><pre class="mermaid" data-graph="tobe">flowchart TB
+  ST["案件登録"]:::system --&gt; P1["目的・基準日・対象範囲の承認"]:::human
+  P1 --&gt; P2["案件マスタを承認&lt;br/&gt;単体/グループ・取得者別・TKC要否"]:::human
+  P2 --&gt; R0
+
+  subgraph G_REC["資料受領・自動分類"]
+    direction TB
+    R0["資料到着をシステムが検知&lt;br/&gt;Dropbox連携"]:::system --&gt; R1["会社/種別/期/版を自動抽出"]:::system
+    R1 --&gt; R2["受領済/未受領一覧・必須/補足を自動照合"]:::system
+    R2 --&gt; R2b["不鮮明/古い版/基準日違い候補を検知"]:::ai
+    R2b --&gt; R3{"必須資料が揃うか"}:::dec
+    R2c["高信頼は自動反映/低信頼のみ人が修正"]:::human
+    R2 --&gt; R2c
+  end
+  R3 --&gt;|"不足/不鮮明/版違い/基準日違い"| RW1["再依頼文案を自動生成→顧客へ再依頼"]:::rework
+  RW1 -.-&gt; R0
+  R3 --&gt;|"揃った会社から"| W0
+
+  subgraph G_QUEUE["着手判断（依存順で管理）"]
+    direction TB
+    W0["着手可能な会社・資産・方式候補を表示"]:::system --&gt; W1["依存関係順で評価キューを管理"]:::system
+    W1 --&gt; W2["カマチが表示キューから優先順位を決定"]:::human
+  end
+  W2 --&gt; M0
+
+  subgraph G_METHOD["方式判定（候補生成→承認）"]
+    direction TB
+    M0["規模・株主区分・特定会社の前提を自動確認"]:::system --&gt; M0b{"前提が揃うか"}:::dec
+    M0b --&gt;|"不足"| MHOLD["判定保留/仮方式で仮計算"]:::rework
+    M0b --&gt;|"充足"| M1["方式判定候補を生成&lt;br/&gt;大=類似/中=併用/小=純資産/少数=配当還元"]:::ai
+    M1 --&gt; MOK["カマチが判定を確認し承認"]:::human
+    MOK --&gt; MJ["判定理由をrule_idとともに保存"]:::system
+  end
+
+  subgraph G_JUN["純資産価額方式"]
+    direction TB
+    J1["帳簿価額候補(資産/負債)"]:::system --&gt; J2["税務調整候補(別表四/五)"]:::system
+    J2 --&gt; J3["土地評価候補(路線価/倍率)"]:::system
+    J3 --&gt; J4["建物評価候補"]:::system
+    J4 --&gt; J5["保険評価候補"]:::system
+    J5 --&gt; J6["有価証券評価候補"]:::system
+    J6 --&gt; J7["海外関係会社評価候補"]:::system
+    J7 --&gt; J8["法人税等相当額控除(37%等)"]:::system
+    J8 --&gt; J9["1株純資産価額を算定"]:::goal
+    JAI["不足/競合/外部不一致を検知→保留"]:::ai
+    J3 --&gt; JAI
+    JCHK["カマチは要確認項目のみ補正"]:::human
+    J9 --&gt; JCHK
+  end
+  J3X["外部: 路線価図/倍率表 候補取得"]:::ext -.-&gt; J3
+
+  subgraph G_RUIJI["類似業種比準方式"]
+    direction TB
+    K1["対象会社・比準要素を自動抽出"]:::system --&gt; K2["業種目候補を生成"]:::ai
+    K2 --&gt; K2H["カマチが業種目を最終確定"]:::human
+    K2H --&gt; K3["類似業種株価を候補取得"]:::system
+    K3 --&gt; K4["比準要素を候補抽出(配当/利益/純資産)"]:::system
+    K4 --&gt; K5["類似業種比準価額を計算"]:::goal
+    KAI["年度違い/単位違いを自動検知"]:::ai
+    K3 --&gt; KAI
+  end
+  K2X["外部公表PDF候補(業種目/株価)"]:::ext -.-&gt; K2
+
+  subgraph G_HEIYO["併用方式"]
+    direction TB
+    H1["純資産と類似を同一画面で並列"]:::system --&gt; H2{"両方確定か"}:::dec
+    H2 --&gt;|"未確定"| H3["併用確定不可を表示"]:::rework
+    H2 --&gt;|"確定"| H4["混合割合で採用単価候補を計算"]:::system
+    H4 --&gt; H5["カマチが混合割合と採用単価を確認"]:::human
+  end
+
+  subgraph G_HAITO["配当還元方式（将来拡張）"]
+    direction TB
+    HD1["少数株主等の該当を検知"]:::ai --&gt; HD2["取得者別評価としてフラグ付け"]:::system
+    HD2 --&gt; HD3["詳細仕様未定→要人手対応を明示"]:::rework
+  end
+
+  MOK --&gt; J1
+  MOK --&gt; K1
+  MOK --&gt; H1
+  MOK --&gt; HD1
+  J9 --&gt; H1
+  K5 --&gt; H1
+
+  subgraph G_DEP["会社依存（状態管理）"]
+    direction TB
+    D1["孫会社キューを自動生成"]:::system --&gt; D2{"孫確定?"}:::dec
+    D2 --&gt;|"未確定"| DBLK["上位を『仮/ブロック中』と表示"]:::rework
+    D2 --&gt;|"確定"| D3["子会社へ自動反映"]:::system
+    D3 --&gt; D4{"子確定?"}:::dec
+    D4 --&gt;|"未確定"| DBLK
+    D4 --&gt;|"確定"| D5["親会社へ自動反映"]:::system
+  end
+  D5 -.-&gt; J6
+  DBLK -.-&gt; W2
+
+  J9 --&gt; SUM0
+  K5 --&gt; SUM0
+  H4 --&gt; SUM0
+  HD2 --&gt; SUM0
+
+  subgraph G_SUM["株価サマリー集約"]
+    direction TB
+    SUM0["各社単価・採用単価候補を集約"]:::system --&gt; SUM1["#REF!/未反映/単位不一致を自動検知"]:::ai
+    SUM1 --&gt; SUM2{"異常があるか"}:::dec
+    SUM2 --&gt; SUMH["カマチが採用単価と総額を確認"]:::human
+  end
+  SUM2 --&gt;|"異常あり"| RW3["計算差し戻し&lt;br/&gt;参照元/セル/式/手入力を表示"]:::rework
+  RW3 -.-&gt; J1
+  RW3 -.-&gt; SUM0
+  SUMH --&gt; OUT0
+
+  subgraph G_OUT["整理表・TKC・追加計算"]
+    direction TB
+    OUT0["TKC入力前整理表を自動生成"]:::system --&gt; AIC1["AIチェック1: 整理表↔計算値の差分"]:::ai
+    AIC1 --&gt; OUTA["カマチが整理表を承認"]:::human
+    OUTA --&gt; OUT1{"TKC対象か"}:::dec
+    OUT1 --&gt;|"対象外/整理表FIX"| OUT4["差分自動照合へ"]:::system
+    OUT1 --&gt;|"対象"| OUT2["入力候補生成→人がTKC入力→出力取得"]:::human
+    OUT2 --&gt; OUT3{"追加計算が必要か"}:::dec
+    OUT3 --&gt;|"必要"| OUT3a["追加計算→カマチ確認"]:::human
+    OUT3 --&gt;|"不要"| OUT4
+    OUT3a --&gt; OUT4
+    OUT4 --&gt; AIC2["AIチェック2: TKC前後の整合性"]:::ai
+    AIC2 --&gt; OUT5{"差分があるか"}:::dec
+  end
+  OUT5 --&gt;|"あり"| RW3
+  OUT5 --&gt;|"なし"| REP0
+
+  subgraph G_REP["報告書・PDF・提出"]
+    direction TB
+    REP0["報告書ドラフトを自動生成(根拠ID紐付)"]:::system --&gt; REP1["数値↔説明を自動照合"]:::ai
+    REP1 --&gt; REP1H["カマチが文章と根拠を確認"]:::human
+    REP1H --&gt; REP2["承認済データからPDFを自動作成"]:::system
+    REP2 --&gt; REP3{"表示崩れ/差替漏れがないか"}:::dec
+    REP3 --&gt;|"異常"| RWR["修正"]:::rework
+    REP3 --&gt;|"正常"| REP4["カマチが提出版を最終承認"]:::human
+  end
+  RWR -.-&gt; REP0
+  REP4 --&gt; FIN["顧客へ提出"]:::goal
+
+  classDef manual fill:#FFE0E0,stroke:#D97A7A,color:#333;
+  classDef system fill:#E6F0FB,stroke:#5B92D1,color:#333;
+  classDef ai fill:#DDF1E2,stroke:#54A06A,color:#333;
+  classDef human fill:#FFF1C9,stroke:#C8A94A,color:#333;
+  classDef ext fill:#ECE3F6,stroke:#9B7FC2,color:#333;
+  classDef rework fill:#F7D9C8,stroke:#C98A5A,color:#333;
+  classDef goal fill:#FFFFFF,stroke:#2E7D46,color:#1B5E20;
+  classDef dec fill:#F2F4F7,stroke:#9AA5B1,color:#333;</pre></div></div>
+</div>
+<script>
+  mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'base',
+    flowchart:{ htmlLabels:true, useMaxWidth:false, nodeSpacing:30, rankSpacing:44 },
+    themeVariables:{ fontFamily:'Noto Sans CJK JP, sans-serif', fontSize:'14px' } });
+
+  const rendered = {};
+  async function renderPanel(k){
+    if(rendered[k]) return;
+    const pre = document.querySelector('.panel[data-k="'+k+'"] pre.mermaid');
+    if(!pre) return;
+    try{
+      await mermaid.run({ nodes:[pre], suppressErrors:false });
+      rendered[k] = true;
+    }catch(e){
+      pre.innerHTML = '<span style="color:#b00">描画エラー: '+ (e && e.message ? e.message : e) +'</span>';
+      console.error(e);
+    }
+  }
+  function activeKey(){ return document.querySelector('.panel.active').dataset.k; }
+  function applyZoom(v){
+    const s = document.querySelector('.panel.active .scale');
+    if(s) s.style.transform = 'scale('+v+')';
+    document.getElementById('zval').textContent = Math.round(v*100)+'%';
+  }
+  const zoom = document.getElementById('zoom');
+  zoom.addEventListener('input', e => applyZoom(parseFloat(e.target.value)));
+  document.getElementById('reset').addEventListener('click', ()=>{ zoom.value=1; applyZoom(1); });
+  document.getElementById('fit').addEventListener('click', ()=>{
+    const stage=document.querySelector('.stage');
+    const svg=document.querySelector('.panel.active svg');
+    if(!svg) return;
+    const w = svg.getBoundingClientRect().width / (parseFloat(zoom.value)||1);
+    const v = Math.max(0.4, Math.min(2.2,(stage.clientWidth-32)/w));
+    zoom.value = v.toFixed(2); applyZoom(v);
+  });
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', async ()=>{
+    const k=t.dataset.k;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.k===k));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.dataset.k===k));
+    const stage=document.querySelector('.stage'); stage.scrollTop=0; stage.scrollLeft=0;
+    await renderPanel(k);
+    applyZoom(parseFloat(zoom.value)||1);
+  }));
+  // initial
+  window.addEventListener('load', async ()=>{ await renderPanel('asis'); });
+</script>
+</body>
+</html>
